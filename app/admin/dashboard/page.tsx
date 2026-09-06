@@ -155,13 +155,24 @@ function DetailModal({ project, onClose }: { project: ProjectRequest; onClose: (
           </div>
         </div>
 
-        <button
-          onClick={onClose}
-          className="btn-secondary"
-          style={{ marginTop: 28, width: '100%', justifyContent: 'center', padding: '12px', fontSize: 14 }}
-        >
-          Close
-        </button>
+        <div style={{ display: 'flex', gap: 10, marginTop: 24, flexWrap: 'wrap' }}>
+          <a
+            href={`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(project.email)}&su=${encodeURIComponent('FutureBuilds — Regarding Your Project Request: ' + project.project_title)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-primary"
+            style={{ flex: 1, minWidth: 160, justifyContent: 'center', padding: '10px 16px', fontSize: 13, textDecoration: 'none' }}
+          >
+            ✉ Compose in Gmail
+          </a>
+          <button
+            onClick={onClose}
+            className="btn-secondary"
+            style={{ flex: 1, minWidth: 100, justifyContent: 'center', padding: '10px 16px', fontSize: 13 }}
+          >
+            Close
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -250,27 +261,64 @@ export default function AdminDashboard() {
 
   /* ── Notify (Accept / Reject) ── */
   const handleNotify = async (project: ProjectRequest, decision: 'accepted' | 'rejected') => {
-    const verb = decision === 'accepted' ? 'accept' : 'reject'
-    if (!confirm(`Send a ${verb}ance email to ${project.email}?`)) return
+    const isAccepted = decision === 'accepted'
+    const verb = isAccepted ? 'accept' : 'reject'
+    if (!confirm(`Send an ${verb}ance notification email to ${project.email}?`)) return
     setNotifyingId(`${project.id}-${decision}`)
+
+    const subject = isAccepted
+      ? 'Your Project Request Has Been Accepted — FutureBuilds'
+      : 'Update on Your Project Request — FutureBuilds'
+
+    const body = isAccepted
+      ? `Hi,\n\nGreat news! We're excited to let you know that your project request ("${project.project_title}") has been accepted by the FutureBuilds team.\n\nOur team will be reaching out within 24–48 hours to discuss next steps, timeline, and project scope.\n\nBest regards,\nFutureBuilds Team\nhttps://futures-builds-web.onrender.com`
+      : `Hi,\n\nThank you for taking the time to submit your project ("${project.project_title}"). After careful review, we're currently unable to take on this particular project at this time.\n\nBest regards,\nFutureBuilds Team\nhttps://futures-builds-web.onrender.com`
+
+    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(project.email)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+
     try {
-      const res  = await fetch('/api/admin/notify', {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 10000)
+
+      const res = await fetch('/api/admin/notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           email:        project.email,
           projectTitle: project.project_title,
           decision,
         }),
       })
-      const json = await res.json()
-      if (json.success) {
-        showToast(`✓ ${decision === 'accepted' ? 'Acceptance' : 'Rejection'} email sent to ${project.email}.`)
-      } else {
-        showToast(json.message || 'Failed to send email.', 'error')
+      clearTimeout(timeoutId)
+
+      let json: any = null
+      try {
+        json = await res.json()
+      } catch {
+        // Response was not JSON
       }
-    } catch {
-      showToast('Network error sending email.', 'error')
+
+      if (json?.success) {
+        showToast(`✓ ${isAccepted ? 'Acceptance' : 'Rejection'} email sent to ${project.email}.`)
+      } else {
+        const errorMsg = json?.message || 'Server automated email could not complete.'
+        const openGmail = confirm(`${errorMsg}\n\nWould you like to open Gmail directly with the pre-filled email to send to ${project.email}?`)
+        if (openGmail) {
+          window.open(gmailUrl, '_blank')
+        }
+        showToast(errorMsg, 'error')
+      }
+    } catch (err: any) {
+      const isTimeout = err?.name === 'AbortError'
+      const msg = isTimeout
+        ? 'Email timed out (free cloud hosts like Render block SMTP ports 465/587).'
+        : 'Network error sending email.'
+      const openGmail = confirm(`${msg}\n\nWould you like to open Gmail to send the email directly to ${project.email}?`)
+      if (openGmail) {
+        window.open(gmailUrl, '_blank')
+      }
+      showToast(msg, 'error')
     } finally {
       setNotifyingId(null)
     }

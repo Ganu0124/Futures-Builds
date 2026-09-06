@@ -1,13 +1,18 @@
-﻿import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import nodemailer from 'nodemailer'
 
 function createTransporter() {
+  const user = process.env.GMAIL_USER?.trim()
+  const pass = process.env.GMAIL_APP_PASSWORD?.replace(/\s+/g, '').trim()
+  
   return nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.GMAIL_USER,
-      pass: process.env.GMAIL_APP_PASSWORD,
-    },
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true,
+    auth: { user, pass },
+    connectionTimeout: 8000,  // 8s timeout
+    greetingTimeout: 8000,
+    socketTimeout: 10000,
   })
 }
 
@@ -21,11 +26,8 @@ export async function POST(req: NextRequest) {
     if (!['accepted', 'rejected'].includes(decision)) {
       return NextResponse.json({ success: false, message: 'Invalid decision value.' }, { status: 400 })
     }
-    if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
-      return NextResponse.json({ success: false, message: 'Gmail credentials not configured in .env.local.' }, { status: 500 })
-    }
 
-    const isAccepted = decision === 'accepted'
+    const isAccepted   = decision === 'accepted'
     const accentColor  = isAccepted ? '#10B981' : '#F59E0B'
     const statusLabel  = isAccepted ? 'ACCEPTED' : 'NOT ACCEPTED'
     const statusBg     = isAccepted ? '#0d2b1f' : '#2b1f0d'
@@ -35,6 +37,10 @@ export async function POST(req: NextRequest) {
     const bodyText = isAccepted
       ? "We're excited to let you know that your project request has been <strong style=\"color:#10B981;\">accepted</strong> by the FutureBuilds team. Our team will be reaching out within <strong>24–48 hours</strong> to discuss the next steps, timeline, and project scope."
       : "Thank you for taking the time to submit your project. After careful review, we're currently unable to take on this particular project at this time. We appreciate your interest in FutureBuilds and encourage you to reach out again — we'd love to find the right opportunity to work together."
+
+    const plainBody = isAccepted
+      ? `Hi,\n\nGreat news! We're excited to let you know that your project request ("${projectTitle}") has been accepted by the FutureBuilds team.\n\nOur team will be reaching out within 24–48 hours to discuss the next steps, timeline, and project scope.\n\nBest regards,\nFutureBuilds Team\nhttps://futures-builds-web.onrender.com`
+      : `Hi,\n\nThank you for taking the time to submit your project ("${projectTitle}"). After careful review, we're currently unable to take on this particular project at this time. We appreciate your interest in FutureBuilds and encourage you to reach out again.\n\nBest regards,\nFutureBuilds Team\nhttps://futures-builds-web.onrender.com`
 
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -87,7 +93,7 @@ export async function POST(req: NextRequest) {
       <!-- CTA -->
       <table cellpadding="0" cellspacing="0" border="0"><tr>
         <td style="background:#10B981;border-radius:999px;">
-          <a href="https://futurebuilds.vercel.app" style="display:inline-block;color:#0a0a0a;font-size:14px;font-weight:800;text-decoration:none;padding:12px 28px;">
+          <a href="https://futures-builds-web.onrender.com" style="display:inline-block;color:#0a0a0a;font-size:14px;font-weight:800;text-decoration:none;padding:12px 28px;">
             Visit FutureBuilds &rarr;
           </a>
         </td>
@@ -123,9 +129,88 @@ export async function POST(req: NextRequest) {
 </body>
 </html>`
 
+    // 1. Check for Brevo API (HTTP API - works on Render Free Tier!)
+    const brevoApiKey = process.env.BREVO_API_KEY?.trim()
+    if (brevoApiKey) {
+      try {
+        const senderEmail = process.env.BREVO_SENDER_EMAIL?.trim() || process.env.GMAIL_USER?.trim() || 'hello@futurebuilds.com'
+        const bRes = await fetch('https://api.brevo.com/v3/smtp/email', {
+          method: 'POST',
+          headers: {
+            'accept': 'application/json',
+            'api-key': brevoApiKey,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({
+            sender: { name: 'FutureBuilds', email: senderEmail },
+            to: [{ email }],
+            subject,
+            htmlContent: html,
+          }),
+        })
+        const bJson = await bRes.json()
+        if (bRes.ok) {
+          return NextResponse.json({
+            success: true,
+            message: `${isAccepted ? 'Acceptance' : 'Rejection'} email sent to ${email} via Brevo.`,
+            subject,
+            plainBody,
+          })
+        }
+        console.error('[notify] Brevo error:', bJson)
+      } catch (bErr) {
+        console.error('[notify] Brevo fetch error:', bErr)
+      }
+    }
+
+    // 2. Check for Resend API (HTTP API - works on Render Free Tier!)
+    const resendApiKey = process.env.RESEND_API_KEY?.trim()
+    if (resendApiKey) {
+      try {
+        const rRes = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${resendApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: 'FutureBuilds <onboarding@resend.dev>',
+            to: [email],
+            subject,
+            html,
+          }),
+        })
+        const rJson = await rRes.json()
+        if (rRes.ok) {
+          return NextResponse.json({
+            success: true,
+            message: `${isAccepted ? 'Acceptance' : 'Rejection'} email sent to ${email} via Resend.`,
+            subject,
+            plainBody,
+          })
+        }
+        console.error('[notify] Resend error:', rJson)
+      } catch (rErr) {
+        console.error('[notify] Resend fetch error:', rErr)
+      }
+    }
+
+    // 3. Fallback to Gmail SMTP (with timeout protection)
+    const gmailUser = process.env.GMAIL_USER?.trim()
+    const gmailPass = process.env.GMAIL_APP_PASSWORD?.replace(/\s+/g, '').trim()
+
+    if (!gmailUser || !gmailPass) {
+      return NextResponse.json({
+        success: false,
+        message: 'Email credentials not configured in environment variables.',
+        subject,
+        plainBody,
+      }, { status: 500 })
+    }
+
     const transporter = createTransporter()
     await transporter.sendMail({
-      from: `"FutureBuilds" <${process.env.GMAIL_USER}>`,
+      from: `"FutureBuilds" <${gmailUser}>`,
       to: email,
       subject,
       html,
@@ -134,9 +219,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       message: `${isAccepted ? 'Acceptance' : 'Rejection'} email sent to ${email}.`,
+      subject,
+      plainBody,
     })
   } catch (err: any) {
     console.error('[notify] Error:', err)
-    return NextResponse.json({ success: false, message: err?.message || 'Failed to send email.' }, { status: 500 })
+    const isTimeout = err?.code === 'ETIMEDOUT' || err?.message?.toLowerCase().includes('timeout')
+    const message = isTimeout
+      ? 'SMTP connection timed out. Free cloud hosts (like Render free tier) block outbound SMTP ports (465/587). Use the Gmail link fallback.'
+      : (err?.message || 'Failed to send email.')
+
+    return NextResponse.json({
+      success: false,
+      message,
+      isTimeout,
+    }, { status: 500 })
   }
 }
