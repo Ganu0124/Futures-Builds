@@ -1016,12 +1016,18 @@ function Footer() {
               Contact
             </div>
             <div style={{ color: '#6B7280', fontSize: 14, lineHeight: 1.8 }}>
-              <div>Admin Portal</div>
               <a
-                href="/admin/login"
-                style={{ color: '#10B981', textDecoration: 'none', fontSize: 13 }}
+                href="mailto:gganu8615@gmail.com"
+                style={{
+                  color: '#6B7280',
+                  textDecoration: 'none',
+                  fontSize: 14,
+                  transition: 'color 0.2s',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = '#10B981')}
+                onMouseLeave={(e) => (e.currentTarget.style.color = '#6B7280')}
               >
-                → Admin Dashboard
+                gganu8615@gmail.com
               </a>
             </div>
           </div>
