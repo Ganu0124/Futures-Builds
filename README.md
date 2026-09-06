@@ -1,36 +1,119 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# FutureBuilds — Full-Stack Website
 
-## Getting Started
+A complete full-stack technology company website built with Next.js, TypeScript, Tailwind CSS, and Supabase.
 
-First, run the development server:
+## 🚀 Quick Start
+
+### 1. Set Up Supabase
+
+1. Go to [supabase.com](https://supabase.com) and create a free project
+2. In the Supabase **SQL Editor**, run the contents of `supabase-setup.sql`
+3. Go to **Project Settings → API** and copy:
+   - Project URL
+   - Anon (public) key
+   - Service Role key
+
+### 2. Configure Environment Variables
+
+Edit `.env.local` with your real Supabase credentials:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
+```
+
+### 3. Create Admin Account
+
+In your Supabase dashboard:
+- Go to **Authentication → Users**
+- Click **"Add User"** → **"Create new user"**
+- Enter your admin email and password
+- That's it — use these credentials to log in at `/admin/login`
+
+### 4. Run the Development Server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 📁 Project Structure
 
-## Learn More
+```
+d:\company
+├── app/
+│   ├── page.tsx                    # Main homepage (public)
+│   ├── layout.tsx                  # Root layout
+│   ├── globals.css                 # Design system & styles
+│   ├── admin/
+│   │   ├── layout.tsx              # Admin layout
+│   │   ├── login/page.tsx          # Admin login
+│   │   └── dashboard/page.tsx      # Admin dashboard
+│   └── api/
+│       ├── submit-project/route.ts # Form submission endpoint
+│       └── admin/
+│           ├── projects/route.ts   # CRUD for project requests
+│           └── export/route.ts     # Excel export endpoint
+├── lib/
+│   ├── supabase.ts                 # Browser Supabase client
+│   └── supabase-admin.ts           # Server-only admin client
+├── proxy.ts                        # Auth protection for admin routes
+├── supabase-setup.sql              # Database setup script
+└── .env.local                      # Environment variables
+```
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 🗃️ Database Schema
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Table: `project_requests`
 
-## Deploy on Vercel
+| Column | Type | Description |
+|---|---|---|
+| id | UUID | Auto-generated primary key |
+| full_name | TEXT | Submitter's full name |
+| email | TEXT | Email address |
+| phone_number | TEXT | Phone number |
+| project_title | TEXT | Title of the project |
+| project_description | TEXT | Description of the project |
+| status | TEXT | Default: `New Request` |
+| created_at | TIMESTAMPTZ | Auto-set on insert |
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 🛡️ Routes
+
+| Route | Access | Description |
+|---|---|---|
+| `/` | Public | Homepage with project request form |
+| `/admin/login` | Public | Admin login page |
+| `/admin/dashboard` | Protected | Admin dashboard |
+| `/api/submit-project` | Public POST | Submit a project request |
+| `/api/admin/projects` | Server | GET/PATCH/DELETE projects |
+| `/api/admin/export` | Server | Download Excel export |
+
+---
+
+## ✅ Status Options
+
+- **New Request** — Default on submission
+- **Under Review** — Being evaluated
+- **Contacted** — Client has been reached
+- **In Progress** — Development started
+- **Completed** — Project finished
+- **Rejected** — Request declined
+
+---
+
+## 🛠️ Tech Stack
+
+- **Frontend**: Next.js 16, React 19, TypeScript
+- **Styling**: Tailwind CSS v4, Custom CSS Design System
+- **Backend**: Next.js API Routes
+- **Database**: Supabase PostgreSQL
+- **Auth**: Supabase Auth
+- **Excel Export**: xlsx library

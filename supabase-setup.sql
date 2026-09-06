@@ -1,35 +1,47 @@
 -- ============================================================
--- FutureBuilds: Supabase Database Setup
--- Run this script in your Supabase SQL Editor
+-- FutureBuilds: Supabase Database Schema
+-- Run this in your Supabase SQL Editor:
+-- https://supabase.com/dashboard/project/mqfpiifujobarbhzivvc/sql/new
 -- ============================================================
 
--- Create project_requests table
+-- 1. Create project_requests table
 CREATE TABLE IF NOT EXISTS project_requests (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  full_name TEXT NOT NULL,
   email TEXT NOT NULL,
   phone_number TEXT NOT NULL,
   project_title TEXT NOT NULL,
   project_description TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'New Request',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Enable Row Level Security
+
+-- 2. Enable Row Level Security (RLS)
 ALTER TABLE project_requests ENABLE ROW LEVEL SECURITY;
 
--- Policy: Authenticated users (admin) have full access
-CREATE POLICY "Admin full access" ON project_requests
-  FOR ALL
-  USING (auth.role() = 'authenticated')
-  WITH CHECK (auth.role() = 'authenticated');
+-- 3. Policy: Public can insert (allow website visitors to submit project requests)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename = 'project_requests' AND policyname = 'Public can insert'
+  ) THEN
+    CREATE POLICY "Public can insert" ON project_requests
+      FOR INSERT WITH CHECK (true);
+  END IF;
+END $$;
 
--- Policy: Anyone can insert (public form submissions)
-CREATE POLICY "Public can insert" ON project_requests
-  FOR INSERT
-  WITH CHECK (true);
+-- 4. Policy: Allow reading for dashboard / authenticated / service role
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename = 'project_requests' AND policyname = 'Allow select'
+  ) THEN
+    CREATE POLICY "Allow select" ON project_requests
+      FOR SELECT USING (true);
+  END IF;
+END $$;
 
--- Index for faster searches
+-- 5. Indexes for fast search
 CREATE INDEX IF NOT EXISTS idx_project_requests_email ON project_requests(email);
-CREATE INDEX IF NOT EXISTS idx_project_requests_status ON project_requests(status);
-CREATE INDEX IF NOT EXISTS idx_project_requests_created_at ON project_requests(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_project_requests_phone ON project_requests(phone_number);
+CREATE INDEX IF NOT EXISTS idx_project_requests_title ON project_requests(project_title);
+CREATE INDEX IF NOT EXISTS idx_project_requests_created ON project_requests(created_at DESC);
