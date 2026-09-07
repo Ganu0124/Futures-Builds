@@ -159,7 +159,7 @@ export async function POST(req: NextRequest) {
         if (bRes.ok) {
           return NextResponse.json({
             success: true,
-            message: `${isAccepted ? 'Acceptance' : 'Rejection'} email sent to ${email} via Brevo.`,
+            message: `${isAccepted ? 'Acceptance' : 'Rejection'} email sent to ${email}.`,
             subject,
             plainBody,
           })
