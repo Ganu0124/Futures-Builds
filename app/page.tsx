@@ -1018,7 +1018,7 @@ function Footer() {
             <div style={{ color: '#6B7280', fontSize: 14, lineHeight: 1.8 }}>
               <div>
                 <a
-                  href="mailto:gganu8615@gmail.com"
+                  href="mailto:futurebuilds6@gmail.com"
                   style={{
                     color: '#6B7280',
                     textDecoration: 'none',
@@ -1028,7 +1028,7 @@ function Footer() {
                   onMouseEnter={(e) => (e.currentTarget.style.color = '#10B981')}
                   onMouseLeave={(e) => (e.currentTarget.style.color = '#6B7280')}
                 >
-                  gganu8615@gmail.com
+                  futurebuilds6@gmail.com
                 </a>
               </div>
               <div style={{ marginTop: 6 }}>
