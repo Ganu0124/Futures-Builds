@@ -1016,19 +1016,36 @@ function Footer() {
               Contact
             </div>
             <div style={{ color: '#6B7280', fontSize: 14, lineHeight: 1.8 }}>
-              <a
-                href="mailto:gganu8615@gmail.com"
-                style={{
-                  color: '#6B7280',
-                  textDecoration: 'none',
-                  fontSize: 14,
-                  transition: 'color 0.2s',
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = '#10B981')}
-                onMouseLeave={(e) => (e.currentTarget.style.color = '#6B7280')}
-              >
-                gganu8615@gmail.com
-              </a>
+              <div>
+                <a
+                  href="mailto:gganu8615@gmail.com"
+                  style={{
+                    color: '#6B7280',
+                    textDecoration: 'none',
+                    fontSize: 14,
+                    transition: 'color 0.2s',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = '#10B981')}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = '#6B7280')}
+                >
+                  gganu8615@gmail.com
+                </a>
+              </div>
+              <div style={{ marginTop: 6 }}>
+                <a
+                  href="tel:+917019147117"
+                  style={{
+                    color: '#6B7280',
+                    textDecoration: 'none',
+                    fontSize: 14,
+                    transition: 'color 0.2s',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = '#10B981')}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = '#6B7280')}
+                >
+                  +91 7019147117
+                </a>
+              </div>
             </div>
           </div>
         </div>
