@@ -1,19 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
 import nodemailer from 'nodemailer'
+import dns from 'node:dns'
 
-function createTransporter() {
+// Force IPv4 DNS resolution to prevent ENETUNREACH on cloud containers
+try {
+  dns.setDefaultResultOrder('ipv4first')
+} catch {}
+
+function createTransporter(port = 465) {
   const user = process.env.GMAIL_USER?.trim()
   const pass = process.env.GMAIL_APP_PASSWORD?.replace(/\s+/g, '').trim()
   
   return nodemailer.createTransport({
     host: 'smtp.gmail.com',
-    port: 465,
-    secure: true,
+    port,
+    secure: port === 465, // true for 465 (SSL), false for 587 (STARTTLS)
+    family: 4,            // Strict IPv4 to avoid IPv6 ENETUNREACH
     auth: { user, pass },
-    connectionTimeout: 8000,  // 8s timeout
-    greetingTimeout: 8000,
-    socketTimeout: 10000,
-  })
+    connectionTimeout: 7000, // 7s timeout
+    greetingTimeout: 7000,
+    socketTimeout: 9000,
+  } as any)
 }
 
 export async function POST(req: NextRequest) {
@@ -133,7 +140,7 @@ export async function POST(req: NextRequest) {
     const brevoApiKey = process.env.BREVO_API_KEY?.trim()
     if (brevoApiKey) {
       try {
-        const senderEmail = process.env.BREVO_SENDER_EMAIL?.trim() || process.env.GMAIL_USER?.trim() || 'hello@futurebuilds.com'
+        const senderEmail = process.env.BREVO_SENDER_EMAIL?.trim() || process.env.GMAIL_USER?.trim() || 'futurebuilds6@gmail.com'
         const bRes = await fetch('https://api.brevo.com/v3/smtp/email', {
           method: 'POST',
           headers: {
@@ -163,7 +170,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 2. Check for Resend API (HTTP API - works on Render Free Tier!)
+    // 2. Check for Resend API (HTTP API)
     const resendApiKey = process.env.RESEND_API_KEY?.trim()
     if (resendApiKey) {
       try {
@@ -195,7 +202,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 3. Fallback to Gmail SMTP (with timeout protection)
+    // 3. Fallback to Gmail SMTP (with IPv4 forced and fallback between ports 465 and 587)
     const gmailUser = process.env.GMAIL_USER?.trim()
     const gmailPass = process.env.GMAIL_APP_PASSWORD?.replace(/\s+/g, '').trim()
 
@@ -208,31 +215,60 @@ export async function POST(req: NextRequest) {
       }, { status: 500 })
     }
 
-    const transporter = createTransporter()
-    await transporter.sendMail({
-      from: `"FutureBuilds" <${gmailUser}>`,
-      to: email,
-      subject,
-      html,
-    })
+    let lastSmtpError: any = null
 
-    return NextResponse.json({
-      success: true,
-      message: `${isAccepted ? 'Acceptance' : 'Rejection'} email sent to ${email}.`,
-      subject,
-      plainBody,
-    })
+    // Try Port 465 (SSL) with strict IPv4
+    try {
+      const transporter465 = createTransporter(465)
+      await transporter465.sendMail({
+        from: `"FutureBuilds" <${gmailUser}>`,
+        to: email,
+        subject,
+        html,
+      })
+      return NextResponse.json({
+        success: true,
+        message: `${isAccepted ? 'Acceptance' : 'Rejection'} email sent to ${email}.`,
+        subject,
+        plainBody,
+      })
+    } catch (err465: any) {
+      console.warn('[notify] Port 465 IPv4 failed:', err465?.message, 'Trying port 587...')
+      lastSmtpError = err465
+    }
+
+    // Try Port 587 (STARTTLS) with strict IPv4
+    try {
+      const transporter587 = createTransporter(587)
+      await transporter587.sendMail({
+        from: `"FutureBuilds" <${gmailUser}>`,
+        to: email,
+        subject,
+        html,
+      })
+      return NextResponse.json({
+        success: true,
+        message: `${isAccepted ? 'Acceptance' : 'Rejection'} email sent to ${email}.`,
+        subject,
+        plainBody,
+      })
+    } catch (err587: any) {
+      console.error('[notify] Port 587 IPv4 also failed:', err587?.message)
+      lastSmtpError = err587
+    }
+
+    throw lastSmtpError
   } catch (err: any) {
     console.error('[notify] Error:', err)
-    const isTimeout = err?.code === 'ETIMEDOUT' || err?.message?.toLowerCase().includes('timeout')
-    const message = isTimeout
-      ? 'SMTP connection timed out. Free cloud hosts (like Render free tier) block outbound SMTP ports (465/587). Use the Gmail link fallback.'
+    const isNetworkBlocked = err?.code === 'ENETUNREACH' || err?.code === 'ETIMEDOUT' || err?.code === 'ECONNREFUSED' || err?.message?.toLowerCase().includes('timeout')
+    const message = isNetworkBlocked
+      ? 'Render free tier blocks SMTP traffic to Gmail. Please configure Brevo API (free HTTP) or use the Gmail fallback button.'
       : (err?.message || 'Failed to send email.')
 
     return NextResponse.json({
       success: false,
       message,
-      isTimeout,
+      isNetworkBlocked,
     }, { status: 500 })
   }
 }
